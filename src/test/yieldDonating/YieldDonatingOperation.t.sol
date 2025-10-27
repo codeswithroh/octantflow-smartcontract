@@ -2,7 +2,7 @@
 pragma solidity ^0.8.25;
 
 import "forge-std/console2.sol";
-import {YieldDonatingSetup as Setup, ERC20, IStrategyInterface} from "./YieldDonatingSetup.sol";
+import {YieldDonatingSetup as Setup, ERC20, IStrategyInterface, ITokenizedStrategy} from "./YieldDonatingSetup.sol";
 
 contract YieldDonatingOperationTest is Setup {
     function setUp() public virtual override {
@@ -14,9 +14,15 @@ contract YieldDonatingOperationTest is Setup {
         assertTrue(address(0) != address(strategy));
         assertEq(strategy.asset(), address(asset));
         assertEq(strategy.management(), management);
-        assertEq(strategy.dragonRouter(), dragonRouter);
+        assertEq(ITokenizedStrategy(address(strategy)).dragonRouter(), dragonRouter);
         assertEq(strategy.keeper(), keeper);
-        assertEq(strategy.enableBurning(), enableBurning);
+        // Check enableBurning using low-level call since it's not in the interface
+        (bool success, bytes memory data) = address(strategy).staticcall(
+            abi.encodeWithSignature("enableBurning()")
+        );
+        require(success, "enableBurning call failed");
+        bool currentEnableBurning = abi.decode(data, (bool));
+        assertEq(currentEnableBurning, enableBurning);
     }
 
     function test_operation(uint256 _amount) public {
@@ -146,9 +152,13 @@ contract YieldDonatingOperationTest is Setup {
             "Dragon shares should be burned"
         );
 
-        // If loss was bigger than dragon shares value, some shares should remain
-        if (lossAmount > strategy.convertToAssets(dragonSharesBefore)) {
+        // If loss was smaller than dragon shares value, some shares should remain
+        uint256 dragonAssetsBefore = strategy.convertToAssets(dragonSharesBefore);
+        if (lossAmount < dragonAssetsBefore) {
             assertGt(dragonSharesAfter, 0, "Some dragon shares should remain");
+        } else {
+            // If loss equals or exceeds dragon assets, all shares should be burned
+            assertEq(dragonSharesAfter, 0, "All dragon shares should be burned");
         }
     }
 

@@ -15,12 +15,18 @@ contract YieldDonatingFunctionSignatureTest is Setup {
     function test_functionCollisions() public {
         uint256 wad = 1e18;
         vm.expectRevert("initialized");
-        strategy.initialize(
-            address(asset),
-            "name",
-            management,
-            performanceFeeRecipient,
-            keeper
+        // Call the actual YieldDonatingTokenizedStrategy initialize function
+        (bool success, ) = address(strategy).call(
+            abi.encodeWithSignature(
+                "initialize(address,string,address,address,address,address,bool)",
+                address(asset),
+                "name",
+                management,
+                keeper,
+                emergencyAdmin,
+                dragonRouter,
+                true
+            )
         );
 
         // Check view functions
@@ -33,14 +39,15 @@ contract YieldDonatingFunctionSignatureTest is Setup {
         assertEq(strategy.totalAssets(), 0, "total assets");
         assertEq(strategy.totalSupply(), 0, "total supply");
         assertEq(strategy.asset(), address(asset), "asset");
-        assertEq(strategy.apiVersion(), "3.0.4", "api");
-        assertEq(strategy.MAX_FEE(), 5_000, "max fee");
+        assertEq(strategy.apiVersion(), "1.0.0", "api");
+        // YieldDonatingTokenizedStrategy doesn't have MAX_FEE
+        // assertEq(strategy.MAX_FEE(), 5_000, "max fee");
         assertGt(strategy.lastReport(), 0, "last report");
         assertEq(strategy.pricePerShare(), 10 ** asset.decimals(), "pps");
         assertTrue(!strategy.isShutdown());
         assertEq(
             strategy.symbol(),
-            string(abi.encodePacked("ys", asset.symbol())),
+            string(abi.encodePacked("os", asset.symbol())),
             "symbol"
         );
         assertEq(strategy.decimals(), asset.decimals(), "decimals");
@@ -55,21 +62,22 @@ contract YieldDonatingFunctionSignatureTest is Setup {
         strategy.setKeeper(user);
         vm.expectRevert("!management");
         strategy.setEmergencyAdmin(user);
-        vm.expectRevert("!management");
-        strategy.setPerformanceFee(uint16(2_000));
-        vm.expectRevert("!management");
-        strategy.setPerformanceFeeRecipient(user);
-        vm.expectRevert("!management");
-        strategy.setProfitMaxUnlockTime(1);
+        // YieldDonatingTokenizedStrategy doesn't have performance fee functions
+        // vm.expectRevert("!management");
+        // strategy.setPerformanceFee(uint16(2_000));
+        // vm.expectRevert("!management");
+        // strategy.setPerformanceFeeRecipient(user);
+        // vm.expectRevert("!management");
+        // strategy.setProfitMaxUnlockTime(1);
         vm.stopPrank();
 
-        // Assure checks are being used
-        vm.startPrank(strategy.management());
-        vm.expectRevert("Cannot be self");
-        strategy.setPerformanceFeeRecipient(address(strategy));
-        vm.expectRevert("too long");
-        strategy.setProfitMaxUnlockTime(type(uint256).max);
-        vm.stopPrank();
+        // Assure checks are being used - skip performance fee related checks
+        // vm.startPrank(strategy.management());
+        // vm.expectRevert("Cannot be self");
+        // strategy.setPerformanceFeeRecipient(address(strategy));
+        // vm.expectRevert("too long");
+        // strategy.setProfitMaxUnlockTime(type(uint256).max);
+        // vm.stopPrank();
 
         // Mint some shares to the user
         airdrop(ERC20(address(strategy)), user, wad);

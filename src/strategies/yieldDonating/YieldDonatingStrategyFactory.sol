@@ -3,7 +3,7 @@ pragma solidity ^0.8.25;
 
 import {YieldDonatingStrategy} from "./YieldDonatingStrategy.sol";
 import {IStrategyInterface} from "../../interfaces/IStrategyInterface.sol";
-import {TokenizedStrategy} from "@octant-core/dragons/vaults/TokenizedStrategy.sol";
+import {YieldDonatingTokenizedStrategy} from "@octant-core/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 
 contract YieldDonatingStrategyFactory {
     event NewStrategy(address indexed strategy, address indexed asset);
@@ -31,7 +31,7 @@ contract YieldDonatingStrategyFactory {
         emergencyAdmin = _emergencyAdmin;
 
         // Deploy the standard TokenizedStrategy implementation
-        tokenizedStrategyAddress = address(new TokenizedStrategy());
+        tokenizedStrategyAddress = address(new YieldDonatingTokenizedStrategy());
     }
 
     /**

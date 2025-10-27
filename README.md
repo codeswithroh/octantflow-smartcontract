@@ -1,6 +1,6 @@
 # Strategy Templates for Octant
 
-This repository provides templates for creating strategies compatible with Octant's ecosystem using [Foundry](https://book.getfoundry.sh/). It supports both **YieldDonating** and **YieldSkimming** strategy patterns adapted for Octant's public goods funding model.
+This repository provides templates for creating strategies compatible with Octant's ecosystem using [Foundry](https://book.getfoundry.sh/). It supports **YieldDonating** strategies adapted for Octant's public goods funding model.
 
 ## Strategy Types
 
@@ -10,14 +10,6 @@ This repository provides templates for creating strategies compatible with Octan
 - **Loss Protection**: When enabled, the strategy can burn shares from the dragonRouter to cover losses and protect users
 - **Use Case**: Traditional yield strategies (Aave, Compound, Yearn vaults) that donate their yield to Octant
 
-### YieldSkimming Strategies (`src/strategies/yieldSkimming/`)
-
-- **Purpose**: Capture yield from appreciating assets through exchange rate tracking and donate the profits to public goods funding
-- **Profit Distribution**: Profits are minted as shares to a designated `dragonRouter` address instead of charging performance fees
-- **Loss Protection**: When enabled, the strategy can burn shares from the dragonRouter to cover losses and protect users
-- **Yield Mechanism**: Works with yield-bearing assets (wstETH, rETH) that appreciate in value over time
-- **Exchange Rate Tracking**: Monitors exchange rate changes to detect and capture yield appreciation
-- **Use Case**: Liquid staking tokens, rebasing tokens, or any asset where yield comes from price appreciation rather than separate rewards
 
 ## Key Differences from Standard Yearn Strategies
 
@@ -26,45 +18,31 @@ This repository is adapted from Yearn V3 tokenized strategies for Octant's ecosy
 - ❌ **No Performance Fees**: Strategies don't charge performance fees to users
 - ✅ **Profit Donation**: All profits are donated to Octant's dragonRouter for public goods funding
 - ✅ **Loss Protection**: Optional burning of dragon shares to protect users from losses
-- ✅ **Two Strategy Patterns**: Support for both traditional yield harvesting and yield-bearing asset appreciation
 
 ## Repository Structure
 
 ```
 src/
 ├── strategies/
-│   ├── yieldDonating/
-│   │   ├── YieldDonatingStrategy.sol       # Template for yield harvesting strategies
-│   │   └── YieldDonatingStrategyFactory.sol
-│   └── yieldSkimming/
-│       ├── YieldSkimmingStrategy.sol        # Template for yield-bearing asset strategies
-│       └── YieldSkimmingStrategyFactory.sol
+│   └── yieldDonating/
+│       ├── YieldDonatingStrategy.sol        # Template for yield harvesting strategies
+│       └── YieldDonatingStrategyFactory.sol
 ├── interfaces/
 │   └── IStrategyInterface.sol
 └── test/
-    ├── yieldDonating/                       # Tests for YieldDonating pattern
-    │   ├── YieldDonatingSetup.sol           # Base setup for YieldDonating tests
-    │   ├── YieldDonatingOperation.t.sol     # Main operation tests
-    │   ├── YieldDonatingFunctionSignature.t.sol # Function signature collision tests
-    │   └── YieldDonatingShutdown.t.sol      # Shutdown and emergency tests
-    ├── yieldSkimming/                       # Tests for YieldSkimming pattern
-    │   ├── YieldSkimmingSetup.sol           # Base setup for YieldSkimming tests
-    │   ├── YieldSkimmingOperation.t.sol     # Main operation tests
-    │   ├── YieldSkimmingFunctionSignature.t.sol # Function signature collision tests
-    │   └── YieldSkimmingShutdown.t.sol      # Shutdown and emergency tests
-    └── utils/                               # Shared testing utilities
+    └── yieldDonating/                       # Tests for YieldDonating pattern
+        ├── YieldDonatingSetup.sol           # Base setup for YieldDonating tests
+        ├── YieldDonatingOperation.t.sol     # Main operation tests
+        ├── YieldDonatingFunctionSignature.t.sol # Function signature collision tests
+        └── YieldDonatingShutdown.t.sol      # Shutdown and emergency tests
 ```
 
 ## Getting Started
 
-For YieldDonating, strategy types, you need to override three core functions:
+For YieldDonating strategies, you need to override three core functions:
 - `_deployFunds`: Deploy assets into yield-generating positions
 - `_freeFunds`: Withdraw assets from positions  
 - `_harvestAndReport`: Harvest rewards and report total assets
-
-For YieldSkimming, strategy types, you need to override two core functions:
-- `getCurrentExchangeRate`: Get the current exchange rate of the yield-bearing asset
-- `decimalsOfExchangeRate`: Get the decimals of the exchange rate
 
 Optional overrides include `_tend`, `_tendTrigger`, `availableDepositLimit`, `availableWithdrawLimit` and `_emergencyWithdraw`.
 
@@ -140,35 +118,6 @@ function _harvestAndReport() internal override returns (uint256 _totalAssets) {
 }
 ```
 
-### YieldSkimming Pattern  
-
-For strategies that work with yield-bearing assets that appreciate over time.
-
-**Example Use Cases:**
-- Lido wstETH (wstETH/ETH exchange rate appreciation)
-- Rocket Pool rETH (rETH/ETH exchange rate appreciation)  
-- ERC4626 vaults that appreciate in value
-- Rebasing tokens that increase in value
-
-**Key Implementation Points:**
-```solidity
-function getCurrentExchangeRate() public view returns (uint256) {
-    // Return current exchange rate of your yield-bearing asset
-    // Example for wstETH: return IWstETH(address(asset)).stEthPerToken();
-    // Example for rETH: return IRocketPool(address(asset)).getExchangeRate();
-    // Example for ERC4626: return IERC4626(address(asset)).convertToAssets(1e18);
-}
-
-function _deployFunds(uint256 _amount) internal override {
-    // Usually no deployment needed for yield-bearing assets
-    // Assets appreciate automatically through exchange rate
-}
-
-function _harvestAndReport() internal override returns (uint256 _totalAssets) {
-    // Track exchange rate changes to detect yield
-    // Return current asset balance - appreciation is captured automatically
-}
-```
 
 ## Strategy Pattern Details
 
@@ -186,19 +135,6 @@ Designed for strategies that:
 - Loss protection through dragon share burning
 - Compatible with any yield source that provides separate rewards
 
-### YieldSkimming Pattern
-
-Designed for strategies that:
-1. Hold yield-bearing assets that appreciate in value
-2. Track exchange rate changes to capture yield appreciation
-3. Donate appreciation gains by minting shares to dragonRouter
-4. Require minimal maintenance (assets appreciate automatically)
-
-**Key Features:**
-- Works with liquid staking tokens and appreciating assets
-- Exchange rate tracking captures yield without external harvesting
-- Ideal for assets like wstETH, rETH, or yield-bearing vaults
-- Simplified implementation for self-appreciating assets
 
 ## Testing
 
@@ -208,15 +144,6 @@ Designed for strategies that:
 - **Harvest Functionality**: Test reward claiming and asset accounting
 - **Dragon Router Management**: Test address updates and cooldowns
 
-### YieldSkimming Strategy Tests  
-- **Exchange Rate Tracking**: Verify rate changes are detected using `vm.mockCall`
-- **Yield Appreciation**: Test profit capture from asset appreciation through mocked exchange rates
-- **Asset Limits**: Test deposit/withdrawal limits
-- **Basic Functionality**: Test core strategy operations
-
-**Note**: YieldSkimming tests use `vm.mockCall` to simulate exchange rate changes rather than adding tokens, since yield comes from appreciation of the underlying asset value, not additional token rewards.
-
-**YieldSkimming Behavior**: When the exchange rate appreciates (e.g., wstETH becomes worth more ETH), users benefit from the appreciation on their holdings, while the yield portion (the appreciation amount) gets minted as new shares to the donation address. This allows users to participate in the asset's growth while donating the yield to public goods funding.
 
 Run tests:
 
@@ -224,15 +151,10 @@ Run tests:
 # All tests
 make test
 
-# YieldDonating tests only
+# YieldDonating tests
 make test-contract contract=YieldDonatingOperation
 make test-contract contract=YieldDonatingFunctionSignature
 make test-contract contract=YieldDonatingShutdown
-
-# YieldSkimming tests only  
-make test-contract contract=YieldSkimmingOperation
-make test-contract contract=YieldSkimmingFunctionSignature
-make test-contract contract=YieldSkimmingShutdown
 
 # With traces for debugging
 make trace
@@ -250,21 +172,6 @@ forge install golemfoundation/octant-v2-core
 
 The strategies inherit from `BaseStrategy` available in octant-v2-core and use the TokenizedStrategy pattern for vault functionality.
 
-## Choosing the Right Strategy Type
-
-### Use YieldDonating When:
-- Your strategy earns separate reward tokens (COMP, AAVE, CRV, etc.)
-- You need to harvest and sell rewards
-- You're working with lending protocols or farms
-- You want traditional yield strategy behavior with donation mechanics
-
-### Use YieldSkimming When:
-- Your asset appreciates in value over time (wstETH, rETH)
-- Yield comes from exchange rate changes, not separate rewards
-- You want minimal maintenance overhead
-- You're working with liquid staking tokens or rebasing assets
-
-Both patterns donate all profits to Octant's public goods funding and provide loss protection mechanisms.
 
 ## Example Implementations
 
@@ -288,18 +195,6 @@ function _harvestAndReport() internal view override returns (uint256 _totalAsset
 }
 ```
 
-### YieldSkimming: Lido wstETH Strategy  
-```solidity
-// Hold wstETH, track stETH/ETH rate appreciation
-function getCurrentExchangeRate() public view returns (uint256) {
-    return IWstETH(address(asset)).stEthPerToken();
-}
-
-function _harvestAndReport() internal override returns (uint256) {
-    // No harvesting needed - wstETH appreciates automatically
-    return asset.balanceOf(address(this));
-}
-```
 
 ## Contract Verification
 
@@ -324,10 +219,8 @@ Add `ETH_RPC_URL` secret to enable test workflows. See [GitHub Actions docs](htt
 ## Contributing
 
 When implementing strategies:
-1. Choose the appropriate pattern (YieldDonating vs YieldSkimming)
-2. Implement the required override functions
-3. Add comprehensive tests
-4. Document exchange rate logic for YieldSkimming strategies
-5. Test profit donation and loss protection mechanisms
+1. Implement the required override functions
+2. Add comprehensive tests
+3. Test profit donation and loss protection mechanisms
 
 For questions or support, please open an issue or reach out to the Octant team.

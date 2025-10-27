@@ -7,6 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {YieldDonatingStrategy as Strategy, ERC20} from "../../strategies/yieldDonating/YieldDonatingStrategy.sol";
 import {YieldDonatingStrategyFactory as StrategyFactory} from "../../strategies/yieldDonating/YieldDonatingStrategyFactory.sol";
 import {IStrategyInterface} from "../../interfaces/IStrategyInterface.sol";
+import {ITokenizedStrategy} from "@octant-core/core/interfaces/ITokenizedStrategy.sol";
 
 // Inherit the events so they can be checked if desired.
 import {IEvents} from "@tokenized-strategy/interfaces/IEvents.sol";
@@ -25,7 +26,7 @@ contract YieldDonatingSetup is Test, IEvents {
     address public user = address(10);
     address public keeper = address(4);
     address public management = address(1);
-    address public dragonRouter = address(3); // Changed from performanceFeeRecipient
+    address public dragonRouter = address(3); // This is the donation address
     address public emergencyAdmin = address(5);
 
     // YieldDonating specific variables
@@ -34,9 +35,6 @@ contract YieldDonatingSetup is Test, IEvents {
 
     // Mock compounder vault address for testing
     address public compounderVault = address(100);
-
-    // Address of the real deployed Factory
-    address public factory;
 
     // Integer variables that will be used repeatedly.
     uint256 public decimals;
@@ -73,11 +71,11 @@ contract YieldDonatingSetup is Test, IEvents {
         // Deploy strategy and set variables
         strategy = IStrategyInterface(setUpStrategy());
 
-        factory = strategy.FACTORY();
+        // factory = strategy.FACTORY(); // Remove this line as FACTORY is not implemented
 
         // label all the used addresses for traces
         vm.label(keeper, "keeper");
-        vm.label(factory, "factory");
+        // vm.label(factory, "factory"); // Factory not used in this setup
         vm.label(address(asset), "asset");
         vm.label(management, "management");
         vm.label(address(strategy), "strategy");
@@ -95,15 +93,15 @@ contract YieldDonatingSetup is Test, IEvents {
                     management,
                     keeper,
                     emergencyAdmin,
-                    donationAddress,
+                    dragonRouter, // Use dragonRouter as the donation address
                     enableBurning,
                     tokenizedStrategyAddress
                 )
             )
         );
 
-        vm.prank(management);
-        _strategy.acceptManagement();
+        // The strategy should already have management set correctly during construction
+        // No need to call acceptManagement as there's no pending management
 
         return address(_strategy);
     }
@@ -155,18 +153,22 @@ contract YieldDonatingSetup is Test, IEvents {
 
     function setDragonRouter(address _newDragonRouter) public {
         vm.prank(management);
-        strategy.setPendingDragonRouter(_newDragonRouter);
+        ITokenizedStrategy(address(strategy)).setDragonRouter(_newDragonRouter);
 
         // Fast forward to bypass cooldown
         skip(7 days);
 
         // Anyone can finalize after cooldown
-        strategy.finalizeDragonRouterUpdate();
+        ITokenizedStrategy(address(strategy)).finalizeDragonRouterChange();
     }
 
     function setEnableBurning(bool _enableBurning) public {
         vm.prank(management);
-        strategy.setEnableBurning(_enableBurning);
+        // Call using low-level call since setEnableBurning may not be in all interfaces
+        (bool success,) = address(strategy).call(
+            abi.encodeWithSignature("setEnableBurning(bool)", _enableBurning)
+        );
+        require(success, "setEnableBurning failed");
     }
 
     function _setTokenAddrs() internal {
