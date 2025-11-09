@@ -5,8 +5,33 @@ import {BaseStrategy} from "@octant-core/core/BaseStrategy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-// todo implement IYieldSource interface
-interface IYieldSource {}
+/// @dev Minimal Aave V3 Pool interface for supply/withdraw and reserve data
+interface IAaveV3Pool {
+    struct ReserveConfigurationMap {
+        uint256 data;
+    }
+    struct ReserveData {
+        ReserveConfigurationMap configuration;
+        uint128 liquidityIndex;
+        uint128 currentLiquidityRate;
+        uint128 variableBorrowIndex;
+        uint128 currentVariableBorrowRate;
+        uint128 currentStableBorrowRate;
+        uint40 lastUpdateTimestamp;
+        uint16 id;
+        address aTokenAddress;
+        address stableDebtTokenAddress;
+        address variableDebtTokenAddress;
+        address interestRateStrategyAddress;
+        uint128 accruedToTreasury;
+        uint128 unbacked;
+        uint128 isolationModeTotalDebt;
+    }
+
+    function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
+    function withdraw(address asset, uint256 amount, address to) external returns (uint256);
+    function getReserveData(address asset) external view returns (ReserveData memory);
+}
 
 /**
  * @title YieldDonating Strategy Template
@@ -23,7 +48,7 @@ contract YieldDonatingStrategy is BaseStrategy {
     using SafeERC20 for ERC20;
 
     /// @notice Address of the yield source (e.g., Aave pool, Compound, Yearn vault)
-    IYieldSource public immutable yieldSource;
+    IAaveV3Pool public immutable yieldSource;
 
     /**
      * @param _asset Address of the underlying asset
@@ -57,7 +82,7 @@ contract YieldDonatingStrategy is BaseStrategy {
             _tokenizedStrategyAddress
         )
     {
-        yieldSource = IYieldSource(_yieldSource);
+        yieldSource = IAaveV3Pool(_yieldSource);
 
         // max allow Yield source to withdraw assets
         ERC20(_asset).forceApprove(_yieldSource, type(uint256).max);
@@ -83,11 +108,8 @@ contract YieldDonatingStrategy is BaseStrategy {
      * to deploy.
      */
     function _deployFunds(uint256 _amount) internal override {
-        // TODO: implement your logic to deploy funds into yield source
-        // Example for AAVE:
-        // yieldSource.supply(address(asset), _amount, address(this), 0);
-        // Example for ERC4626 vault:
-        // IERC4626(compounderVault).deposit(_amount, address(this));
+        if (_amount == 0) return;
+        yieldSource.supply(address(asset), _amount, address(this), 0);
     }
 
     /**
@@ -112,12 +134,8 @@ contract YieldDonatingStrategy is BaseStrategy {
      * @param _amount, The amount of 'asset' to be freed.
      */
     function _freeFunds(uint256 _amount) internal override {
-        // TODO: implement your logic to free funds from yield source
-        // Example for AAVE:
-        // yieldSource.withdraw(address(asset), _amount, address(this));
-        // Example for ERC4626 vault:
-        // uint256 shares = IERC4626(compounderVault).convertToShares(_amount);
-        // IERC4626(compounderVault).redeem(shares, address(this), address(this));
+        if (_amount == 0) return;
+        yieldSource.withdraw(address(asset), _amount, address(this));
     }
 
     /**
@@ -143,10 +161,13 @@ contract YieldDonatingStrategy is BaseStrategy {
      * amount of 'asset' the strategy currently holds including idle funds.
      */
     function _harvestAndReport() internal override returns (uint256 _totalAssets) {
-        // TODO: Implement harvesting logic
-        // 1. Amount of assets claimable from the yield source
-        // 2. Amount of assets idle in the strategy
-        // 3. Return the total (assets claimable + assets idle)
+        // Deployed assets measured as aToken balance
+        IAaveV3Pool.ReserveData memory reserveData = yieldSource.getReserveData(address(asset));
+        address aToken = reserveData.aTokenAddress;
+
+        uint256 deployedAssets = aToken == address(0) ? 0 : ERC20(aToken).balanceOf(address(this));
+        uint256 idleAssets = ERC20(address(asset)).balanceOf(address(this));
+        _totalAssets = deployedAssets + idleAssets;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -226,5 +247,14 @@ contract YieldDonatingStrategy is BaseStrategy {
      *
      * @param _amount The amount of asset to attempt to free.
      */
-    function _emergencyWithdraw(uint256 _amount) internal virtual override {}
+    function _emergencyWithdraw(uint256 _amount) internal virtual override {
+        if (_amount == type(uint256).max) {
+            // Withdraw entire position for this asset
+            yieldSource.withdraw(address(asset), type(uint256).max, address(this));
+            return;
+        }
+        if (_amount > 0) {
+            yieldSource.withdraw(address(asset), _amount, address(this));
+        }
+    }
 }
